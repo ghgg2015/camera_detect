@@ -1,9 +1,11 @@
 """运动传感器组件"""
 
 import logging
+import asyncio
 import voluptuous as vol
 import cv2
 import requests
+import time
 from homeassistant.components.binary_sensor import PLATFORM_SCHEMA, BinarySensorEntity
 import homeassistant.helpers.config_validation as cv
 
@@ -34,10 +36,11 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     sensor_name = config[CONF_NAME]
     detect_url = config[CONF_DETECT_URL]
     camera_url = config[CONF_CAMERA_URL]
+    camera_sensor = CameraMotionSensor(sensor_id, sensor_name, detect_url, camera_url)
     async_add_entities(
-        [CameraMotionSensor(sensor_id, sensor_name, detect_url, camera_url)], True)
+        [camera_sensor], True)
     async_track_time_interval(
-        hass, lambda arg: self.async_schedule_update_ha_state(True), scan_interval)
+        hass, camera_sensor.async_update, timedelta(second=scan_interval))
 
 
 class CameraMotionSensor(BinarySensorEntity):
@@ -52,8 +55,7 @@ class CameraMotionSensor(BinarySensorEntity):
         self._name = name
         self._detect_url = detect_url
         self._camera_url = camera_url
-        self._state = False
-        self._unique_id = "camera_detect"
+        self._state = 'off'
 
     @property
     def name(self):
@@ -77,9 +79,9 @@ class CameraMotionSensor(BinarySensorEntity):
         # self._state = temperature > 25
         person_status = await self.detectPerson()
         if person_status == CameraMotionSensor.EXISTS:
-            self.state = 'on'
+            self.state = True
         else :
-            self.state = 'off'
+            self.state = False
 
     async def async_turn_on(self, **kwargs):
         """打开传感器。"""
